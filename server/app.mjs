@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { openDatabase } from './database.mjs';
 import { commentError, commentKey, hasProfanity, normalizedText } from './validation.mjs';
 
@@ -11,16 +11,6 @@ const sessionDuration = 7 * 24 * 60 * 60 * 1000;
 const cookieName = 'nuri_session';
 const studentCookieName = 'nuri_student';
 const studentDuration = 365 * 24 * 60 * 60 * 1000;
-
-function text(value, min, max) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length >= min &&
-    trimmed.length <= max &&
-    !/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(trimmed)
-    ? trimmed
-    : null;
-}
 
 function cookieToken(req, name = cookieName) {
   const cookie = req.headers.cookie
@@ -33,21 +23,12 @@ function cookieToken(req, name = cookieName) {
 export async function createApp({
   dataDir,
   databaseUrl,
-  classCode,
   className = '탑텐반',
   production = false,
   secureCookie = false,
   trustProxy = false,
 }) {
-  if (
-    typeof classCode !== 'string' ||
-    classCode.trim().length < 6 ||
-    classCode.trim().length > 128
-  ) {
-    throw new Error('CLASS_CODE must contain between 6 and 128 characters.');
-  }
   const db = await openDatabase({ dataDir, databaseUrl });
-  const classKey = hash(classCode.trim()).toString('hex');
   const app = express();
   if (trustProxy) app.set('trust proxy', trustProxy);
   app.disable('x-powered-by');
@@ -153,18 +134,15 @@ export async function createApp({
     await db.query('SELECT 1');
     res.json({ ok: true });
   });
-  app.get('/api/config', (_req, res) => res.json({ className }));
+  app.get('/api/config', (_req, res) => res.json({ className, entryMode: 'nickname' }));
   app.post('/api/session', loginLimit, async (req, res) => {
     const nickname = normalizedText(req.body?.nickname, 2, 12);
-    const code = text(req.body?.classCode, 6, 128);
     if (!nickname || /[\r\n\t]/.test(nickname))
       return res.status(400).json({ error: '별명은 줄바꿈 없이 2~12글자로 적어 주세요.' });
     if (hasProfanity(nickname))
       return res
         .status(400)
         .json({ error: '욕설이나 친구에게 상처 주는 말이 없는 별명을 정해 주세요.' });
-    if (!code || !timingSafeEqual(hash(code), hash(classCode.trim())))
-      return res.status(401).json({ error: '학급 코드를 다시 확인해 주세요.' });
     const token = randomBytes(32).toString('hex');
     const tokenHash = hash(token).toString('hex');
     const student = await studentIdentity(req, nickname);
@@ -172,9 +150,10 @@ export async function createApp({
       Date.now(),
       hash(cookieToken(req)).toString('hex'),
     ]);
+    // Retain the legacy NOT NULL column without using it as an entry requirement.
     await db.query(
       'INSERT INTO sessions (token_hash, nickname, expires_at, class_key, student_id) VALUES ($1, $2, $3, $4, $5)',
-      [tokenHash, nickname, Date.now() + sessionDuration, classKey, student.id],
+      [tokenHash, nickname, Date.now() + sessionDuration, 'nickname-only', student.id],
     );
     res.cookie(cookieName, token, { ...cookieOptions, maxAge: sessionDuration });
     res.cookie(studentCookieName, student.token, { ...cookieOptions, maxAge: studentDuration });
@@ -190,10 +169,10 @@ export async function createApp({
   app.use('/api', async (req, res, next) => {
     const sessionHash = hash(cookieToken(req)).toString('hex');
     const [session] = await db.query(
-      'SELECT nickname, student_id FROM sessions WHERE token_hash = $1 AND expires_at > $2 AND class_key = $3',
-      [sessionHash, Date.now(), classKey],
+      'SELECT nickname, student_id FROM sessions WHERE token_hash = $1 AND expires_at > $2',
+      [sessionHash, Date.now()],
     );
-    if (!session) return res.status(401).json({ error: '학급 코드로 먼저 입장해 주세요.' });
+    if (!session) return res.status(401).json({ error: '닉네임을 정하고 먼저 입장해 주세요.' });
     if (!session.student_id) {
       const student = await studentIdentity(req, session.nickname);
       // Preserve existing sessions when upgrading the classroom database.

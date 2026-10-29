@@ -3,7 +3,7 @@ import { createApp } from '../server/app.mjs';
 let instance;
 
 export default async function handler(req, res) {
-  if (!process.env.DATABASE_URL || !process.env.CLASS_CODE?.trim()) {
+  if (!process.env.DATABASE_URL) {
     return res
       .status(503)
       .json({ error: '선생님이 이야기방을 준비하고 있어요. 잠시 후 다시 와 주세요.' });
@@ -11,7 +11,6 @@ export default async function handler(req, res) {
   try {
     instance ??= createApp({
       databaseUrl: process.env.DATABASE_URL,
-      classCode: process.env.CLASS_CODE,
       className: process.env.CLASS_NAME || '탑텐반',
       production: true,
       secureCookie: true,

@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { createApp } from '../server/app.mjs';
 
 async function fixture(t, options = {}) {
-  const { app, db } = await createApp({ classCode: 'proxy-test-class', ...options });
+  const { app, db } = await createApp(options);
   // A test-only route makes Express's resolved address observable without
   // adding an address-disclosure endpoint to the classroom API.
   app.get('/test-client-address', (req, res) => res.json({ ip: req.ip }));
@@ -37,18 +37,18 @@ test('one trusted Vercel hop keeps login limits separate for different client ad
   });
   // Only the nearest forwarded address is trusted, not arbitrary earlier hops.
   assert.deepEqual(await response.json(), { ip: '198.51.100.10' });
-  async function wrongCode(address) {
+  async function invalidNickname(address) {
     const result = await fetch(`${base}/api/session`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-forwarded-for': address },
-      body: JSON.stringify({ nickname: '초록새싹', classCode: 'wrong-test-code' }),
+      body: JSON.stringify({ nickname: ' ' }),
     });
     await result.json();
     return result.status;
   }
   for (let attempt = 0; attempt < 20; attempt++) {
-    assert.equal(await wrongCode('198.51.100.10'), 401);
+    assert.equal(await invalidNickname('198.51.100.10'), 400);
   }
-  assert.equal(await wrongCode('198.51.100.10'), 429);
-  assert.equal(await wrongCode('198.51.100.11'), 401);
+  assert.equal(await invalidNickname('198.51.100.10'), 429);
+  assert.equal(await invalidNickname('198.51.100.11'), 400);
 });

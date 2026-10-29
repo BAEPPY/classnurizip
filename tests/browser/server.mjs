@@ -12,7 +12,6 @@ const child = spawn(process.execPath, ['server/index.mjs', '--production'], {
     PORT: '3100',
     HOST: '127.0.0.1',
     DATABASE_URL: '',
-    CLASS_CODE: 'browser-test-only',
     COOKIE_SECURE: 'false',
   },
 });

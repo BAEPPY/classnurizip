@@ -10,7 +10,6 @@ import {
   CornerDownRight,
   Flower2,
   Heart,
-  KeyRound,
   LayoutGrid,
   LogOut,
   MessageCircle,
@@ -18,7 +17,6 @@ import {
   Plus,
   Search,
   Send,
-  ShieldCheck,
   Sparkles,
   Sprout,
   Sun,
@@ -75,7 +73,6 @@ const revisionQuestions = [
 
 function Login({ className, onLogin }: { className: string; onLogin: (name: string) => void }) {
   const [nickname, setNickname] = useState('');
-  const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent) {
@@ -85,7 +82,7 @@ function Login({ className, onLogin }: { className: string; onLogin: (name: stri
     try {
       const session = await api<{ nickname: string }>('/session', {
         method: 'POST',
-        body: JSON.stringify({ nickname, classCode: code }),
+        body: JSON.stringify({ nickname }),
       });
       onLogin(session.nickname);
     } catch (err) {
@@ -132,24 +129,12 @@ function Login({ className, onLogin }: { className: string; onLogin: (name: stri
         </section>
         <section className="login-card" aria-labelledby="login-title">
           <div className="login-icon">
-            <KeyRound size={25} />
+            <Users size={25} />
           </div>
           <span className="eyebrow">HELLO, FRIEND!</span>
           <h2 id="login-title">{className}에 놀러 왔나요?</h2>
-          <p>선생님이 알려 주신 학급 코드로 들어와요.</p>
+          <p>나만의 닉네임을 정하고 바로 들어와요.</p>
           <form onSubmit={submit}>
-            <label htmlFor="class-code">학급 코드</label>
-            <input
-              id="class-code"
-              type="password"
-              autoComplete="off"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder="학급 코드를 입력해 주세요"
-              minLength={6}
-              maxLength={128}
-              required
-            />
             <label htmlFor="nickname">친구들이 불러 줄 별명</label>
             <input
               id="nickname"
@@ -175,11 +160,11 @@ function Login({ className, onLogin }: { className: string; onLogin: (name: stri
             </button>
           </form>
           <div className="login-note">
-            <ShieldCheck size={18} />
+            <Heart size={18} />
             <span>
-              학급 코드를 아는 우리 반 친구들만
+              서로의 생각을 존중하며
               <br />
-              이야기를 볼 수 있어요.
+              다정한 이야기를 나눠요.
             </span>
           </div>
         </section>

@@ -1,31 +1,17 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes } from 'node:crypto';
 import { createApp } from './app.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = resolve(process.env.DATA_DIR || resolve(root, '.data'));
 mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-let classCode = process.env.CLASS_CODE?.trim();
-if (!classCode) {
-  const codePath = resolve(dataDir, 'class-code.txt');
-  if (!existsSync(codePath)) {
-    writeFileSync(codePath, randomBytes(6).toString('hex').toUpperCase() + '\n', {
-      mode: 0o600,
-      flag: 'wx',
-    });
-  }
-  classCode = readFileSync(codePath, 'utf8').trim();
-  console.log(`Class code is stored in ${codePath}. Share it with your class only.`);
-}
 const production = process.argv.includes('--production');
 const { app, db } = await createApp({
   dataDir: resolve(dataDir, 'postgres'),
   databaseUrl: process.env.DATABASE_URL,
-  classCode,
   className: process.env.CLASS_NAME || '탑텐반',
   production,
   secureCookie: process.env.COOKIE_SECURE === 'true',

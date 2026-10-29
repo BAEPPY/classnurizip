@@ -14,7 +14,7 @@ const essay = [
 
 async function login(page: Page, nickname: string) {
   await page.goto('/');
-  await page.getByLabel('학급 코드', { exact: true }).fill('browser-test-only');
+  await expect(page.getByLabel('학급 코드', { exact: true })).toHaveCount(0);
   await page.getByLabel('친구들이 불러 줄 별명').fill(nickname);
   await page.getByRole('button', { name: '우리 반 들어가기' }).click();
   await expect(page.getByRole('dialog', { name: '새 이야기 쓰기' })).toBeVisible();
@@ -34,14 +34,12 @@ test('classmates revise, publish, recommend, reply, and complete one comment mis
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
-  await page.getByLabel('학급 코드', { exact: true }).fill('wrong-code');
-  await page.getByLabel('친구들이 불러 줄 별명').fill('초록새싹');
-  await page.getByRole('button', { name: '우리 반 들어가기' }).click();
-  await expect(page.getByRole('alert')).toHaveText('학급 코드를 다시 확인해 주세요.');
-  await page.getByLabel('학급 코드', { exact: true }).fill('browser-test-only');
+  await expect(page.getByLabel('학급 코드', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('친구들이 불러 줄 별명')).toBeVisible();
+  await page.screenshot({ path: 'test-results/nickname-entry.png', fullPage: true });
   await page.getByLabel('친구들이 불러 줄 별명').fill('씨발');
   await page.getByRole('button', { name: '우리 반 들어가기' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('욕설');
   await login(page, '초록새싹');
   const title = '친구들과 함께 기르는 우리 반 강낭콩';
   const submit = page.getByRole('button', { name: '글 올리기', exact: true });

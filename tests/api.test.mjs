@@ -9,7 +9,6 @@ import { PGlite } from '@electric-sql/pglite';
 import { createApp } from '../server/app.mjs';
 
 let instance, server, base, directory, alice, bob, post, firstComment;
-const classCode = randomBytes(12).toString('hex');
 const essay = [
   '우리 반 친구들과 함께 학교 텃밭에서 강낭콩을 기르고 있습니다. 처음에는 작은 씨앗에서 어떻게 커다란 잎이 나오는지 궁금했습니다.',
   '매일 아침 흙이 마르지 않았는지 살펴보고 필요한 만큼만 물을 주었습니다. 물을 너무 많이 주면 뿌리가 상할 수 있다는 사실도 배웠습니다.',
@@ -38,8 +37,8 @@ function mergeCookies(existing = '', headers) {
   }
   return [...jar].map(([name, value]) => `${name}=${value}`).join('; ');
 }
-async function start(code = classCode) {
-  instance = await createApp({ dataDir: join(directory, 'postgres'), classCode: code, production: true });
+async function start() {
+  instance = await createApp({ dataDir: join(directory, 'postgres'), production: true });
   server = instance.app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   base = `http://127.0.0.1:${server.address().port}`;
@@ -66,7 +65,7 @@ async function request(path, { method = 'GET', body, cookie, origin } = {}) {
   return { status: response.status, headers: response.headers, data: response.status === 204 ? null : await response.json() };
 }
 async function login(nickname, cookie) {
-  const response = await request('/session', { method: 'POST', cookie, body: { nickname, classCode } });
+  const response = await request('/session', { method: 'POST', cookie, body: { nickname } });
   assert.equal(response.status, 200, JSON.stringify(response.data));
   return mergeCookies(cookie, response.headers);
 }
@@ -82,16 +81,16 @@ before(async () => {
 });
 after(async () => { await stop(); await rm(directory, { recursive: true, force: true }); });
 
-test('class code protects all classroom records and nicknames reject profanity', async () => {
+test('nickname-only entry starts a session while anonymous access and profane nicknames are rejected', async () => {
   assert.equal((await request('/health')).data.ok, true);
-  assert.equal(typeof (await request('/config')).data.className, 'string');
+  assert.deepEqual((await request('/config')).data, { className: '탑텐반', entryMode: 'nickname' });
   for (const path of ['/posts', '/posts/unknown', '/session', '/mission']) assert.equal((await request(path)).status, 401);
   assert.equal((await request('/posts', { method: 'POST', body: validPost() })).status, 401);
-  assert.equal((await request('/session', { method: 'POST', body: { nickname: '초록새싹', classCode: 'incorrect' } })).status, 401);
+  assert.equal((await request('/session', { method: 'POST', body: {} })).status, 400);
   for (const nickname of [' ', '씨발', '시발놈']) {
-    assert.equal((await request('/session', { method: 'POST', body: { nickname, classCode } })).status, 400);
+    assert.equal((await request('/session', { method: 'POST', body: { nickname } })).status, 400);
   }
-  const response = await request('/session', { method: 'POST', body: { nickname: '초록새싹', classCode } });
+  const response = await request('/session', { method: 'POST', body: { nickname: '초록새싹' } });
   assert.equal(response.status, 200);
   assert.match(response.headers.get('set-cookie'), /HttpOnly/);
   assert.match(response.headers.get('set-cookie'), /SameSite=Lax/);
@@ -264,14 +263,9 @@ test('a different nickname on the same device has separate mission and recommend
   assert.equal((await mission(bob)).data.completedMissions, 1);
 });
 
-test('changing the class code revokes existing sessions', async () => {
-  await stop(); await start(randomBytes(12).toString('hex'));
-  assert.equal((await request('/posts', { cookie: alice })).status, 401);
-  assert.equal((await request('/posts', { cookie: bob })).status, 401);
-});
 
 
-test('upgrading the original database preserves stories and sessions without retroactive mission credit', async () => {
+test('nickname-only upgrade preserves legacy code-era sessions, stories, and mission eligibility', async () => {
   const legacyPath = join(directory, 'legacy-postgres');
   const legacyDb = new PGlite(legacyPath);
   await legacyDb.waitReady;
@@ -282,11 +276,11 @@ test('upgrading the original database preserves stories and sessions without ret
   `);
   const token = randomBytes(32).toString('hex');
   const hash = (value) => createHash('sha256').update(value).digest('hex');
-  await legacyDb.query('INSERT INTO sessions VALUES ($1, $2, $3, $4)', [hash(token), '옛날친구', Date.now() + 60_000, hash(classCode)]);
+  await legacyDb.query('INSERT INTO sessions VALUES ($1, $2, $3, $4)', [hash(token), '옛날친구', Date.now() + 60_000, hash('old-access-code-no-longer-required')]);
   await legacyDb.query('INSERT INTO posts (id, author, category, title, content, created_at) VALUES ($1, $2, $3, $4, $5, $6)', ['legacy-post', '옛날친구', 'daily', '기존의 짧은 글', '예전에 쓴 내용을 그대로 보존해요.', new Date().toISOString()]);
   await legacyDb.query('INSERT INTO comments (id, post_id, author, content, created_at) VALUES ($1, $2, $3, $4, $5)', ['legacy-comment', 'legacy-post', '옛날친구', '예전 댓글이에요.', new Date().toISOString()]);
   await legacyDb.close();
-  const upgraded = await createApp({ dataDir: legacyPath, classCode, production: true });
+  const upgraded = await createApp({ dataDir: legacyPath, production: true });
   const legacyServer = upgraded.app.listen(0, '127.0.0.1');
   await once(legacyServer, 'listening');
   const legacyBase = `http://127.0.0.1:${legacyServer.address().port}/api`;

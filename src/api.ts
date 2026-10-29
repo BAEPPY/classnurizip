@@ -7,10 +7,15 @@ export type Post = {
   content: string;
   created_at: string;
   comment_count: number;
+  like_count: number;
+  liked: boolean;
+  is_own: boolean;
 };
 export type Comment = {
   id: string;
   post_id: string;
+  parent_id: string | null;
+  is_own: boolean;
   author: string;
   content: string;
   created_at: string;
@@ -69,4 +74,14 @@ export function dateLabel(value: string, full = false) {
     day: 'numeric',
     ...(full ? { hour: 'numeric', minute: 'numeric' } : {}),
   }).format(new Date(value));
+}
+
+export type Mission = {
+  count: number;
+  target: number;
+  completed: boolean;
+  completedMissions: number;
+};
+export function characterCount(value: string) {
+  return [...value.normalize('NFC').replace(/\s/gu, '')].length;
 }

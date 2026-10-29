@@ -27,6 +27,26 @@ const schema = `
     CREATE INDEX IF NOT EXISTS comments_post ON comments(post_id, sequence);
     CREATE INDEX IF NOT EXISTS posts_created ON posts(sequence DESC);
     CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
+    CREATE TABLE IF NOT EXISTS students (
+      id TEXT PRIMARY KEY,
+      identity_hash TEXT UNIQUE,
+      created_at TEXT NOT NULL
+    );
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS student_id TEXT;
+    ALTER TABLE posts ADD COLUMN IF NOT EXISTS student_id TEXT;
+    ALTER TABLE comments ADD COLUMN IF NOT EXISTS student_id TEXT;
+    ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE;
+    ALTER TABLE comments ADD COLUMN IF NOT EXISTS normalized_content TEXT;
+    ALTER TABLE comments ADD COLUMN IF NOT EXISTS mission_eligible BOOLEAN NOT NULL DEFAULT FALSE;
+    CREATE UNIQUE INDEX IF NOT EXISTS comments_student_content ON comments(student_id, normalized_content)
+      WHERE student_id IS NOT NULL AND normalized_content IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS comments_mission ON comments(student_id, mission_eligible);
+    CREATE TABLE IF NOT EXISTS post_likes (
+      post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      student_id TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      PRIMARY KEY (post_id, student_id)
+    );
 `;
 
 export async function openDatabase({ dataDir, databaseUrl }) {

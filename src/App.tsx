@@ -7,6 +7,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CornerDownRight,
   Flower2,
   Heart,
   KeyRound,
@@ -24,6 +25,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import SchoolIllustration from './SchoolIllustration';
 import {
   api,
   ApiError,
@@ -34,6 +36,8 @@ import {
   type Post,
   type PostDetail,
   type PostList,
+  type Mission,
+  characterCount,
 } from './api';
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -43,7 +47,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
         <BookOpen size={23} strokeWidth={2} />
       </span>
       <span>
-        클래스누리집<span className="brand-caption">작은 이야기, 함께 자라는 우리</span>
+        탑텐반 학급누리집<span className="brand-caption">작은 이야기, 함께 자라는 우리</span>
       </span>
     </div>
   );
@@ -59,43 +63,15 @@ function Avatar({ name, small = false }: { name: string; small?: boolean }) {
 }
 
 function Illustration() {
-  return (
-    <div className="illustration" aria-hidden="true">
-      <span className="little-star star-one">✦</span>
-      <span className="little-star star-two">✧</span>
-      <span className="little-star star-three">✦</span>
-      <div className="illustration-circle" />
-      <div className="paper paper-back">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="paper paper-front">
-        <span className="paper-label">우리 반 이야기</span>
-        <div className="paper-smile">
-          <i />
-          <i />
-          <b />
-        </div>
-        <div className="paper-lines">
-          <span />
-          <span />
-        </div>
-        <span className="paper-heart">
-          <Heart size={20} fill="currentColor" />
-        </span>
-      </div>
-      <div className="pencil-art" />
-      <div className="plant-art">
-        <Sprout size={68} strokeWidth={1.5} />
-      </div>
-      <div className="bubble-art">
-        <MessageCircle size={30} />
-        <span>안녕!</span>
-      </div>
-    </div>
-  );
+  return <SchoolIllustration />;
 }
+
+const revisionQuestions = [
+  '매체의 특성을 고려해 글을 썼나요?',
+  '글을 쓰는 목적에 알맞은 매체를 골랐나요?',
+  '읽는 친구를 생각하며 내용과 표현을 다듬었나요?',
+  '맞춤법과 띄어쓰기를 확인했나요?',
+];
 
 function Login({ className, onLogin }: { className: string; onLogin: (name: string) => void }) {
   const [nickname, setNickname] = useState('');
@@ -186,7 +162,7 @@ function Login({ className, onLogin }: { className: string; onLogin: (name: stri
               required
             />
             <span className="field-hint">
-              진짜 이름 대신 좋아하는 별명을 써도 좋아요. (2~12글자)
+              이름 대신 나만의 닉네임을 정해요. 욕설은 사용할 수 없어요. (2~12글자)
             </span>
             {error && (
               <p className="error" role="alert">
@@ -306,15 +282,30 @@ function Composer({
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent) {
+  const [reviewing, setReviewing] = useState(false);
+  const [checks, setChecks] = useState([false, false, false, false]);
+  const titleCount = characterCount(title),
+    contentCount = characterCount(content);
+  const valid = titleCount >= 10 && contentCount >= 500;
+  function review(event: FormEvent) {
     event.preventDefault();
+    if (!valid) {
+      setError('제목은 10자 이상, 내용은 500자 이상 써 주세요. (공백 제외)');
+      return;
+    }
+    setError('');
+    setChecks([false, false, false, false]);
+    setReviewing(true);
+  }
+  async function publish() {
+    if (busy || !checks.every(Boolean) || !valid) return;
     setBusy(true);
     setError('');
     try {
       onCreated(
         await api<Post>('/posts', {
           method: 'POST',
-          body: JSON.stringify({ category, title, content }),
+          body: JSON.stringify({ category, title, content, revisionChecks: checks }),
         }),
       );
     } catch (err) {
@@ -325,70 +316,163 @@ function Composer({
     }
   }
   return (
-    <Modal title="새 이야기 쓰기" onClose={onClose}>
-      <form className="compose-form" onSubmit={submit}>
-        <div className="author-line">
-          <Avatar name={nickname} />
-          <div>
-            <strong>{nickname}</strong>
-            <span>어떤 이야기를 들려줄 건가요?</span>
+    <Modal
+      title={reviewing ? '스스로 고쳐쓰기' : '새 이야기 쓰기'}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      wide
+    >
+      {reviewing ? (
+        <div className="compose-form review-form">
+          <div className="review-intro">
+            <span className="review-icon">
+              <Pencil size={28} />
+            </span>
+            <h2>잠깐! 내 글을 다시 읽어 볼까요?</h2>
+            <p>글을 올리기 전, 하나씩 살펴보고 스스로 체크해요.</p>
+          </div>
+          <details className="review-preview">
+            <summary>내가 쓴 글 다시 읽기</summary>
+            <h3>{title}</h3>
+            <p className="story-content">{content}</p>
+          </details>
+          <div className="review-checks">
+            {revisionQuestions.map((question, i) => (
+              <label className={`review-check ${checks[i] ? 'checked' : ''}`} key={question}>
+                <input
+                  type="checkbox"
+                  checked={checks[i]}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setChecks((current) =>
+                      current.map((value, j) => (j === i ? event.target.checked : value)),
+                    )
+                  }
+                />
+                <span>{question}</span>
+              </label>
+            ))}
+          </div>
+          <p className="kind-note">
+            <Check size={16} /> {checks.filter(Boolean).length} / 4 확인했어요. 모두 체크하면 게시할
+            수 있어요.
+          </p>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <div className="form-actions review-actions">
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => {
+                setReviewing(false);
+                setError('');
+              }}
+            >
+              <ArrowLeft size={16} />
+              돌아가서 고치기
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={busy || !checks.every(Boolean)}
+              onClick={() => void publish()}
+            >
+              <Send size={16} />
+              {busy ? '올리는 중…' : '확인하고 게시하기'}
+            </button>
           </div>
         </div>
-        <fieldset className="category-picker">
-          <legend>이야기 주제</legend>
-          {categories.map((item) => (
-            <label key={item.id} className={category === item.id ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="category"
-                value={item.id}
-                checked={category === item.id}
-                onChange={() => setCategory(item.id)}
-              />
-              <span>
-                {item.emoji} {item.label}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <label htmlFor="post-title">제목</label>
-        <input
-          id="post-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="이야기에 이름을 붙여 주세요"
-          maxLength={80}
-          required
-        />
-        <label htmlFor="post-content">나의 이야기</label>
-        <textarea
-          id="post-content"
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder={categories.find((item) => item.id === category)!.prompt}
-          maxLength={3000}
-          rows={7}
-          required
-        />
-        <span className="character-count">{content.length.toLocaleString()} / 3,000</span>
-        <p className="kind-note">
-          <Heart size={16} /> 친구를 존중하는 말로, 개인정보는 빼고 적어요.
-        </p>
-        {error && (
-          <p role="alert" className="error">
-            {error}
+      ) : (
+        <form className="compose-form" onSubmit={review}>
+          <div className="author-line">
+            <Avatar name={nickname} />
+            <div>
+              <strong>{nickname}</strong>
+              <span>나의 생각을 차근차근 담아 봐요.</span>
+            </div>
+          </div>
+          <div className="writing-guide">
+            <Pencil size={17} />
+            <span>
+              제목 <b>10자 이상</b> · 내용 <b>500자 이상</b> · 공백 제외
+            </span>
+          </div>
+          <fieldset className="category-picker">
+            <legend>이야기 주제</legend>
+            {categories.map((item) => (
+              <label key={item.id} className={category === item.id ? 'selected' : ''}>
+                <input
+                  type="radio"
+                  name="category"
+                  value={item.id}
+                  checked={category === item.id}
+                  onChange={() => setCategory(item.id)}
+                />
+                <span>
+                  {item.emoji} {item.label}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <label htmlFor="post-title">제목</label>
+          <input
+            id="post-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="어떤 이야기인가요? 10자 이상으로 적어 주세요."
+            maxLength={80}
+            required
+            aria-describedby="title-count"
+          />
+          <span id="title-count" className={`field-counter ${titleCount >= 10 ? 'valid' : ''}`}>
+            {titleCount}자 / 최소 10자 {titleCount >= 10 ? '✓' : `· ${10 - titleCount}자 더 써요`}
+          </span>
+          <label htmlFor="post-content">나의 이야기</label>
+          <textarea
+            id="post-content"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder={
+              categories.find((item) => item.id === category)!.prompt +
+              '\n내 생각과 그 까닭, 구체적인 예를 함께 써 보세요.'
+            }
+            maxLength={3000}
+            rows={10}
+            required
+            aria-describedby="content-count"
+          />
+          <span
+            id="content-count"
+            className={`field-counter ${contentCount >= 500 ? 'valid' : ''}`}
+          >
+            {contentCount.toLocaleString()}자 / 최소 500자{' '}
+            {contentCount >= 500 ? '✓' : `· ${500 - contentCount}자 더 써요`}{' '}
+            <small>(공백 제외 / 최대 3,000자)</small>
+          </span>
+          <p className="kind-note">
+            <Heart size={16} />
+            친구를 존중하는 말로, 개인정보는 빼고 적어요.
           </p>
-        )}
-        <div className="form-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
-            취소
-          </button>
-          <button className="button primary" disabled={busy || !title.trim() || !content.trim()}>
-            <Send size={16} />
-            {busy ? '올리는 중…' : '이야기 올리기'}
-          </button>
-        </div>
-      </form>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <div className="form-actions">
+            <button type="button" className="button secondary" onClick={onClose}>
+              게시판 보기
+            </button>
+            <button className="button primary" disabled={!valid}>
+              <Send size={16} />글 올리기
+            </button>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 }
@@ -411,7 +495,10 @@ function StoryDetail({
   const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [liking, setLiking] = useState(false);
   const [notice, setNotice] = useState('');
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  const commentInput = useRef<HTMLTextAreaElement>(null);
   const load = useCallback(async () => {
     setLoadError('');
     try {
@@ -424,15 +511,33 @@ function StoryDetail({
   useEffect(() => {
     void load();
   }, [load]);
+  async function recommend() {
+    if (liking) return;
+    setLiking(true);
+    setError('');
+    try {
+      const result = await api<{ like_count: number; liked: boolean }>(`/posts/${id}/like`, {
+        method: 'POST',
+      });
+      setPost((current) => current && { ...current, ...result });
+      onComment();
+    } catch (err) {
+      setError((err as Error).message);
+      onError(err);
+    } finally {
+      setLiking(false);
+    }
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      const comment = await api<Comment>(`/posts/${id}/comments`, {
+      const comment = await api<Comment & { mission: Mission }>(`/posts/${id}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, ...(replyTo ? { parentId: replyTo.id } : {}) }),
       });
       setPost(
         (current) =>
@@ -443,7 +548,16 @@ function StoryDetail({
           },
       );
       setContent('');
-      setNotice('따뜻한 댓글을 남겼어요.');
+      setReplyTo(null);
+      setNotice(
+        comment.parent_id
+          ? '친구에게 답글을 남겼어요.'
+          : post?.is_own
+            ? '내 글에 댓글을 남겼어요. 미션은 친구 글에서 도전해요.'
+            : comment.mission.completed
+              ? '축하해요! 댓글 3개 미션을 완료했어요. 🎉'
+              : `다정한 댓글을 남겼어요. 미션 ${comment.mission.count} / 3개!`,
+      );
       onComment();
     } catch (err) {
       setError((err as Error).message);
@@ -452,7 +566,41 @@ function StoryDetail({
       setBusy(false);
     }
   }
+  function startReply(comment: Comment) {
+    setReplyTo(comment);
+    setError('');
+    setNotice('');
+    commentInput.current?.focus();
+  }
   const category = categories.find((item) => item.id === post?.category);
+  function renderComment(comment: Comment, reply = false) {
+    return (
+      <li key={comment.id} className={reply ? 'reply-comment' : ''}>
+        {reply && <CornerDownRight className="reply-arrow" aria-hidden="true" size={22} />}
+        <Avatar name={comment.author} small />
+        <div className="comment-body">
+          <div className="comment-meta">
+            <strong>{comment.author}</strong>
+            <time dateTime={comment.created_at}>{dateLabel(comment.created_at, true)}</time>
+          </div>
+          <p>{comment.content}</p>
+          {!reply && (
+            <button className="reply-button" onClick={() => startReply(comment)}>
+              <MessageCircle size={13} />
+              답글 쓰기
+            </button>
+          )}
+          {!reply && post?.comments.some((item) => item.parent_id === comment.id) && (
+            <ol className="comments reply-list">
+              {post.comments
+                .filter((item) => item.parent_id === comment.id)
+                .map((item) => renderComment(item, true))}
+            </ol>
+          )}
+        </div>
+      </li>
+    );
+  }
   return (
     <Modal title="우리 반 이야기" onClose={onClose} wide>
       {loadError ? (
@@ -481,49 +629,70 @@ function StoryDetail({
               <time dateTime={post.created_at}>{dateLabel(post.created_at, true)}</time>
             </div>
             <p className="story-content">{post.content}</p>
+            <div className="post-reactions">
+              <button
+                className={`recommend-button ${post.liked ? 'active' : ''}`}
+                aria-pressed={post.liked}
+                onClick={() => void recommend()}
+                disabled={liking}
+              >
+                <Heart size={20} fill={post.liked ? 'currentColor' : 'none'} />
+                {post.liked ? '추천했어요' : '추천하기'} <b>{post.like_count}</b>
+              </button>
+              <span>좋은 생각에 마음을 보내요.</span>
+            </div>
           </article>
           <section className="comment-section" aria-label="댓글">
             <h3>
-              <MessageCircle size={19} /> 함께 나눈 이야기 <span>{post.comments.length}</span>
+              <MessageCircle size={19} />
+              함께 나눈 이야기 <span>{post.comments.length}</span>
             </h3>
             {post.comments.length === 0 ? (
               <p className="comment-empty">첫 번째 다정한 한마디를 남겨 주세요.</p>
             ) : (
               <ol className="comments">
-                {post.comments.map((comment) => (
-                  <li key={comment.id}>
-                    <Avatar name={comment.author} small />
-                    <div>
-                      <div className="comment-meta">
-                        <strong>{comment.author}</strong>
-                        <time dateTime={comment.created_at}>
-                          {dateLabel(comment.created_at, true)}
-                        </time>
-                      </div>
-                      <p>{comment.content}</p>
-                    </div>
-                  </li>
-                ))}
+                {post.comments
+                  .filter((comment) => !comment.parent_id)
+                  .map((comment) => renderComment(comment))}
               </ol>
             )}
             <form onSubmit={submit} className="comment-form">
-              <label htmlFor="comment-content">{nickname}의 한마디</label>
+              <label htmlFor="comment-content">
+                {replyTo ? `${replyTo.author}에게 답글 쓰기` : `${nickname}의 한마디`}
+              </label>
+              {replyTo && (
+                <div className="reply-target">
+                  <span>
+                    <CornerDownRight size={16} aria-hidden="true" /> {replyTo.author}의 댓글에
+                    답해요
+                  </span>
+                  <button type="button" className="reply-button" onClick={() => setReplyTo(null)}>
+                    답글 취소
+                  </button>
+                </div>
+              )}
               <textarea
+                ref={commentInput}
                 id="comment-content"
                 rows={3}
                 value={content}
                 onChange={(event) => setContent(event.target.value)}
-                placeholder="친구에게 따뜻한 댓글을 남겨 주세요."
+                placeholder="친구의 생각에 대한 내 의견과 까닭을 20자 이상 적어 주세요."
                 required
                 maxLength={500}
               />
               <div className="comment-actions">
-                <span>{content.length} / 500</span>
-                <button className="button primary" disabled={busy || !content.trim()}>
+                <span className={characterCount(content) >= 20 ? 'valid' : ''}>
+                  {characterCount(content)}자 / 최소 20자 (공백 제외)
+                </span>
+                <button className="button primary" disabled={busy || characterCount(content) < 20}>
                   <Send size={15} />
-                  {busy ? '남기는 중…' : '댓글 남기기'}
+                  {busy ? '남기는 중…' : replyTo ? '답글 남기기' : '댓글 남기기'}
                 </button>
               </div>
+              <p className="comment-guide">
+                친구 글의 댓글 3개로 미션 도전! 대댓글과 내 글의 댓글은 미션에 포함되지 않아요.
+              </p>
               {error && (
                 <p className="error" role="alert">
                   {error}
@@ -537,6 +706,82 @@ function StoryDetail({
         </>
       )}
     </Modal>
+  );
+}
+
+function useMission(revision: number, onError: (err: unknown) => void) {
+  const [mission, setMission] = useState<Mission | null>(null);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const abort = new AbortController();
+    setError('');
+    api<Mission>('/mission', { signal: abort.signal })
+      .then(setMission)
+      .catch((err) => {
+        if (!abort.signal.aborted) {
+          setError(err.message);
+          onError(err);
+        }
+      });
+    return () => abort.abort();
+  }, [revision, retry, onError]);
+  return { mission, error, retry: () => setRetry((value) => value + 1) };
+}
+
+function MissionCard({ state }: { state: ReturnType<typeof useMission> }) {
+  const { mission, error, retry } = state;
+  return (
+    <section
+      className={`mission-card ${mission?.completed ? 'completed' : ''}`}
+      aria-label="댓글 미션"
+    >
+      <div className="mission-header">
+        <span className="mission-sticker">★ MISSION 01</span>
+        <span className="mission-status">{mission?.completed ? '미션 1개 완료!' : '도전 중'}</span>
+      </div>
+      <h3>
+        댓글 미션! <span>댓글 3개 쓰기</span>
+      </h3>
+      <p>
+        친구의 글을 읽고, 내 생각을
+        <br />
+        20자 이상 정성껏 남겨요.
+      </p>
+      <div className="mission-steps" aria-label={`댓글 ${mission?.count ?? 0}개 완료`}>
+        {[1, 2, 3].map((number) => (
+          <span
+            key={number}
+            className={`mission-step ${(mission?.count ?? 0) >= number ? 'done' : ''}`}
+          >
+            {(mission?.count ?? 0) >= number ? <Check size={20} /> : number}
+          </span>
+        ))}
+      </div>
+      {error ? (
+        <>
+          <p className="error" role="alert">
+            {error}
+          </p>
+          <button className="reply-button" onClick={retry}>
+            다시 불러오기
+          </button>
+        </>
+      ) : (
+        <p className="mission-progress" role="status">
+          {!mission
+            ? '미션을 불러오는 중…'
+            : mission.completed
+              ? '참 잘했어요! 마음을 나누는 댓글 친구 🏅'
+              : `${mission.count} / 3개 · ${3 - mission.count}개 더 쓰면 완료!`}
+        </p>
+      )}
+      <small>
+        공백·반복 문자·복사한 댓글은 인정되지 않아요.
+        <br />
+        대댓글과 내 글의 댓글은 미션에서 제외해요.
+      </small>
+    </section>
   );
 }
 
@@ -558,6 +803,9 @@ function PostCard({ post, onClick }: { post: Post; onClick: () => void }) {
           </span>
         </span>
         <span className="comment-count">
+          <Heart size={15} />
+          <span className="sr-only">추천 </span>
+          {post.like_count ?? 0}
           <MessageCircle size={16} />
           <span className="sr-only">댓글 </span>
           {post.comment_count}
@@ -584,7 +832,7 @@ function Board({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const [compose, setCompose] = useState(false);
+  const [compose, setCompose] = useState(true);
   const [detail, setDetail] = useState<string | null>(null);
   const [rules, setRules] = useState(false);
   const [toast, setToast] = useState('');
@@ -596,6 +844,7 @@ function Board({
     },
     [onLogout],
   );
+  const missionState = useMission(revision, onError);
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(query.trim());
@@ -690,6 +939,7 @@ function Board({
             </button>
           ))}
         </nav>
+        <MissionCard state={missionState} />
         <div className="sidebar-promise">
           <span className="promise-icon">
             <Heart size={22} />
@@ -743,21 +993,24 @@ function Board({
                 <Sun size={16} /> 반가워요, {nickname}!
               </span>
               <h1>
-                작은 이야기도,
+                탑텐반 학급누리집
                 <br />
-                <span>함께 나누면 특별해져요.</span>
+                <span>생각을 나누며 함께 자라요!</span>
               </h1>
-              <p>오늘의 생각을 꺼내 놓고, 친구의 마음도 만나 봐요.</p>
+              <p>나의 생각을 쓰고, 스스로 고치고, 친구의 마음도 만나 봐요.</p>
               <button className="button primary" onClick={() => setCompose(true)}>
                 <Pencil size={17} />내 이야기 쓰기
               </button>
             </div>
             <Illustration />
           </section>
+          <div className="mobile-mission">
+            <MissionCard state={missionState} />
+          </div>
           <section className="board-section" id="stories">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">OUR LITTLE STORIES</span>
+                <span className="eyebrow">우리 반 자유 게시판</span>
                 <h2>
                   우리들의 이야기 <span>{data?.total ?? 0}</span>
                 </h2>
@@ -899,7 +1152,7 @@ function Board({
             </button>
           </section>
           <footer className="board-footer">
-            <span>클래스누리집</span>
+            <span>탑텐반 학급누리집</span>
             <span>서로의 이야기를 소중히, 우리의 마음을 다정히.</span>
             <Flower2 size={18} />
           </footer>
@@ -971,7 +1224,7 @@ function Board({
 
 export default function App() {
   const [nickname, setNickname] = useState<string | null>(null);
-  const [className, setClassName] = useState('우리 반');
+  const [className, setClassName] = useState('탑텐반');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const logout = useCallback(() => setNickname(null), []);

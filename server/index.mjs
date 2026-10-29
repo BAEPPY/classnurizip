@@ -26,7 +26,7 @@ const { app, db } = await createApp({
   dataDir: resolve(dataDir, 'postgres'),
   databaseUrl: process.env.DATABASE_URL,
   classCode,
-  className: process.env.CLASS_NAME || '우리 반',
+  className: process.env.CLASS_NAME || '탑텐반',
   production,
   secureCookie: process.env.COOKIE_SECURE === 'true',
 });

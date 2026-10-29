@@ -12,9 +12,11 @@ export default async function handler(req, res) {
     instance ??= createApp({
       databaseUrl: process.env.DATABASE_URL,
       classCode: process.env.CLASS_CODE,
-      className: process.env.CLASS_NAME || '우리 반',
+      className: process.env.CLASS_NAME || '탑텐반',
       production: true,
       secureCookie: true,
+      // Vercel supplies the client address through its single trusted proxy hop.
+      trustProxy: 1,
     });
     const { app } = await instance;
     return app(req, res);

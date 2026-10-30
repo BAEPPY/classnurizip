@@ -45,8 +45,10 @@ test('classmates revise, publish, recommend, reply, and complete one comment mis
   const submit = page.getByRole('button', { name: '글 올리기', exact: true });
   await expect(submit).toBeDisabled();
   await page.getByLabel('제목', { exact: true }).fill(title);
-  await page.getByLabel('나의 이야기', { exact: true }).fill(essay.replace(/\s/gu, '').slice(0, 499));
+  await page.getByLabel('나의 이야기', { exact: true }).fill(essay.replace(/\s/gu, '').slice(0, 199));
   await expect(submit).toBeDisabled();
+  await page.getByLabel('나의 이야기', { exact: true }).fill(essay.replace(/\s/gu, '').slice(0, 200));
+  await expect(submit).toBeEnabled();
   await page.getByLabel('나의 이야기', { exact: true }).fill(essay);
   await page.getByRole('radio', { name: /책 이야기/ }).check();
   await page.screenshot({ path: 'test-results/topten-composer.png', fullPage: false });

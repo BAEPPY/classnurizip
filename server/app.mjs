@@ -226,12 +226,12 @@ export async function createApp({
   });
   app.post('/api/posts', writeLimit, async (req, res) => {
     const title = normalizedText(req.body?.title, 10, 80);
-    const content = normalizedText(req.body?.content, 500, 3000);
+    const content = normalizedText(req.body?.content, 200, 3000);
     const category = req.body?.category;
     if (!title || !content || !categories.has(category))
       return res.status(400).json({
         error:
-          '공백을 제외하고 제목은 10자 이상, 내용은 500자 이상 써 주세요. 제목은 전체 80자, 내용은 전체 3,000자 이내예요.',
+          '공백을 제외하고 제목은 10자 이상, 내용은 200자 이상 써 주세요. 제목은 전체 80자, 내용은 전체 3,000자 이내예요.',
       });
     if (
       !Array.isArray(req.body?.revisionChecks) ||

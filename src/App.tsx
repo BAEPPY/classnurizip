@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import SchoolIllustration from './SchoolIllustration';
+import { hasDraftText, useStoryDraft } from './useStoryDraft';
 import {
   api,
   ApiError,
@@ -251,31 +252,38 @@ function Modal({
 
 function Composer({
   nickname,
-  initialCategory,
+  storyDraft,
   onClose,
   onCreated,
   onError,
 }: {
   nickname: string;
-  initialCategory: Category;
+  storyDraft: ReturnType<typeof useStoryDraft>;
   onClose: () => void;
   onCreated: (post: Post) => void;
   onError: (err: unknown) => void;
 }) {
-  const [category, setCategory] = useState(initialCategory);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const { draft, updateDraft, clearDraft, saveState, restored } = storyDraft;
+  const { category, title, content } = draft;
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [checks, setChecks] = useState([false, false, false, false]);
   const titleCount = characterCount(title),
     contentCount = characterCount(content);
-  const valid = titleCount >= 10 && contentCount >= 500;
+  const valid = titleCount >= 10 && contentCount >= 200;
+  const hasText = hasDraftText(draft);
+  function requestClose() {
+    if (busy) return;
+    if (hasText && !window.confirm(saveState === 'saved'
+      ? '아직 글을 올리지 않았어요. 나가겠습니까?\n작성한 글은 자동 임시저장되어 같은 기기와 닉네임으로 이어 쓸 수 있어요.'
+      : '자동 임시저장을 하지 못했어요. 이 페이지를 나가면 쓴 것이 날아갑니다! 나가겠습니까?')) return;
+    onClose();
+  }
   function review(event: FormEvent) {
     event.preventDefault();
     if (!valid) {
-      setError('제목은 10자 이상, 내용은 500자 이상 써 주세요. (공백 제외)');
+      setError('제목은 10자 이상, 내용은 200자 이상 써 주세요. (공백 제외)');
       return;
     }
     setError('');
@@ -287,12 +295,12 @@ function Composer({
     setBusy(true);
     setError('');
     try {
-      onCreated(
-        await api<Post>('/posts', {
-          method: 'POST',
-          body: JSON.stringify({ category, title, content, revisionChecks: checks }),
-        }),
-      );
+      const post = await api<Post>('/posts', {
+        method: 'POST',
+        body: JSON.stringify({ category, title, content, revisionChecks: checks }),
+      });
+      clearDraft();
+      onCreated(post);
     } catch (err) {
       setError((err as Error).message);
       onError(err);
@@ -303,11 +311,18 @@ function Composer({
   return (
     <Modal
       title={reviewing ? '스스로 고쳐쓰기' : '새 이야기 쓰기'}
-      onClose={() => {
-        if (!busy) onClose();
-      }}
+      onClose={requestClose}
       wide
     >
+      <div className={`draft-status ${saveState === 'error' ? 'draft-error' : ''}`} role={saveState === 'error' ? 'alert' : 'status'}>
+        <strong>{saveState === 'error'
+          ? '자동 임시저장을 하지 못했어요.'
+          : restored ? '임시저장한 글을 불러왔어요.'
+          : saveState === 'saved' ? '자동 임시저장했어요.' : '쓰는 동안 자동으로 임시저장해요.'}</strong>
+        <span>{saveState === 'error'
+          ? '페이지를 나가기 전에 글을 따로 복사해 두세요.'
+          : '같은 기기·브라우저에서 같은 닉네임으로 이어 쓸 수 있어요.'}</span>
+      </div>
       {reviewing ? (
         <div className="compose-form review-form">
           <div className="review-intro">
@@ -384,7 +399,7 @@ function Composer({
           <div className="writing-guide">
             <Pencil size={17} />
             <span>
-              제목 <b>10자 이상</b> · 내용 <b>500자 이상</b> · 공백 제외
+              제목 <b>10자 이상</b> · 내용 <b>200자 이상</b> · 공백 제외
             </span>
           </div>
           <fieldset className="category-picker">
@@ -396,7 +411,7 @@ function Composer({
                   name="category"
                   value={item.id}
                   checked={category === item.id}
-                  onChange={() => setCategory(item.id)}
+                  onChange={() => updateDraft({ ...draft, category: item.id })}
                 />
                 <span>
                   {item.emoji} {item.label}
@@ -408,7 +423,7 @@ function Composer({
           <input
             id="post-title"
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => updateDraft({ ...draft, title: event.target.value })}
             placeholder="어떤 이야기인가요? 10자 이상으로 적어 주세요."
             maxLength={80}
             required
@@ -421,7 +436,7 @@ function Composer({
           <textarea
             id="post-content"
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={(event) => updateDraft({ ...draft, content: event.target.value })}
             placeholder={
               categories.find((item) => item.id === category)!.prompt +
               '\n내 생각과 그 까닭, 구체적인 예를 함께 써 보세요.'
@@ -433,10 +448,10 @@ function Composer({
           />
           <span
             id="content-count"
-            className={`field-counter ${contentCount >= 500 ? 'valid' : ''}`}
+            className={`field-counter ${contentCount >= 200 ? 'valid' : ''}`}
           >
-            {contentCount.toLocaleString()}자 / 최소 500자{' '}
-            {contentCount >= 500 ? '✓' : `· ${500 - contentCount}자 더 써요`}{' '}
+            {contentCount.toLocaleString()}자 / 최소 200자{' '}
+            {contentCount >= 200 ? '✓' : `· ${200 - contentCount}자 더 써요`}{' '}
             <small>(공백 제외 / 최대 3,000자)</small>
           </span>
           <p className="kind-note">
@@ -449,7 +464,7 @@ function Composer({
             </p>
           )}
           <div className="form-actions">
-            <button type="button" className="button secondary" onClick={onClose}>
+            <button type="button" className="button secondary" onClick={requestClose}>
               게시판 보기
             </button>
             <button className="button primary" disabled={!valid}>
@@ -822,10 +837,29 @@ function Board({
   const [rules, setRules] = useState(false);
   const [toast, setToast] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
+  const storyDraft = useStoryDraft(nickname);
+  const hasUnpublishedStory = hasDraftText(storyDraft.draft);
+  const unsavedDraft = useRef(false);
+  useEffect(() => {
+    unsavedDraft.current = hasUnpublishedStory && storyDraft.saveState === 'error';
+  }, [hasUnpublishedStory, storyDraft.saveState]);
+  useEffect(() => {
+    if (!hasUnpublishedStory) return;
+    function warnBeforeLeaving(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [hasUnpublishedStory]);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const onError = useCallback(
     (err: unknown) => {
-      if (err instanceof ApiError && err.status === 401) onLogout();
+      if (err instanceof ApiError && err.status === 401) {
+        if (unsavedDraft.current) {
+          setError('입장 시간이 만료되었어요. 글을 먼저 복사해 두고 다시 입장해 주세요.');
+        } else onLogout();
+      }
     },
     [onLogout],
   );
@@ -865,7 +899,16 @@ function Board({
     setCategory(value);
     setPage(1);
   }
+  function openComposer() {
+    if (!hasDraftText(storyDraft.draft)) {
+      storyDraft.updateDraft({ ...storyDraft.draft, category: category === 'all' ? 'daily' : category });
+    }
+    setCompose(true);
+  }
   async function logout() {
+    if (hasUnpublishedStory && storyDraft.saveState === 'error' && !window.confirm(
+      '자동 임시저장을 하지 못했어요. 나가면 쓴 것이 날아갑니다! 나가겠습니까?',
+    )) return;
     setLoggingOut(true);
     try {
       await api('/session', { method: 'DELETE' });
@@ -983,7 +1026,7 @@ function Board({
                 <span>생각을 나누며 함께 자라요!</span>
               </h1>
               <p>나의 생각을 쓰고, 스스로 고치고, 친구의 마음도 만나 봐요.</p>
-              <button className="button primary" onClick={() => setCompose(true)}>
+              <button className="button primary" onClick={openComposer}>
                 <Pencil size={17} />내 이야기 쓰기
               </button>
             </div>
@@ -1084,7 +1127,7 @@ function Board({
                         setQuery('');
                         setSearch('');
                         selectCategory('all');
-                      } else setCompose(true);
+                      } else openComposer();
                     }}
                   >
                     {search ? <ArrowLeft size={16} /> : <Plus size={17} />}
@@ -1132,7 +1175,7 @@ function Board({
               <strong>무슨 이야기를 쓸지 고민된다면?</strong>
               <p>“오늘 나를 웃게 한 작은 일”을 들려주는 건 어때요?</p>
             </div>
-            <button className="button text-button" onClick={() => setCompose(true)}>
+            <button className="button text-button" onClick={openComposer}>
               이야기 시작하기 <ArrowRight size={16} />
             </button>
           </section>
@@ -1146,7 +1189,7 @@ function Board({
       {compose && (
         <Composer
           nickname={nickname}
-          initialCategory={category === 'all' ? 'daily' : category}
+          storyDraft={storyDraft}
           onClose={() => setCompose(false)}
           onCreated={created}
           onError={onError}
@@ -1254,7 +1297,7 @@ export default function App() {
       </div>
     );
   return nickname ? (
-    <Board nickname={nickname} className={className} onLogout={logout} />
+    <Board key={nickname} nickname={nickname} className={className} onLogout={logout} />
   ) : (
     <Login className={className} onLogin={setNickname} />
   );

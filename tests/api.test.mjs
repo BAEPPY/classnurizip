@@ -75,7 +75,7 @@ async function comment(cookie, content, parentId, postId = post.id) {
 const mission = (cookie) => request('/mission', { cookie });
 
 before(async () => {
-  assert.ok(count(essay) >= 500);
+  assert.ok(count(essay) >= 200);
   directory = await mkdtemp(join(tmpdir(), 'nuri-api-'));
   await start();
 });
@@ -100,14 +100,14 @@ test('nickname-only entry starts a session while anonymous access and profane ni
   assert.deepEqual((await mission(bob)).data, { count: 0, target: 3, completed: false, completedMissions: 0 });
 });
 
-test('the server enforces 10/500 non-whitespace characters and every revision check', async () => {
+test('the server enforces 10/200 non-whitespace characters and every revision check', async () => {
   const writer = await login('글쓰기연습');
   const compactEssay = essay.replace(/\s/gu, '');
   for (const overrides of [
     { title: '우리모두함께하는글'.slice(0, 9) },
     { title: '가 '.repeat(9) },
-    { content: compactEssay.slice(0, 499) },
-    { content: `${compactEssay.slice(0, 499)}${' '.repeat(400)}` },
+    { content: compactEssay.slice(0, 199) },
+    { content: `${compactEssay.slice(0, 199)}${' \n\t'.repeat(100)}` },
     { revisionChecks: undefined },
     { revisionChecks: [true, true, true, false] },
     { revisionChecks: [true, true, true] },
@@ -117,10 +117,13 @@ test('the server enforces 10/500 non-whitespace characters and every revision ch
     const result = await request('/posts', { method: 'POST', cookie: writer, body: validPost(overrides) });
     assert.equal(result.status, 400, JSON.stringify({ overrides, result: result.data }));
   }
-  const boundary = validPost({ title: '우리모두함께읽는이야기'.slice(0, 10), content: compactEssay.slice(0, 500) });
+  const boundary = validPost({ title: '우리모두함께읽는이야기'.slice(0, 10), content: compactEssay.slice(0, 200) });
   assert.equal(count(boundary.title), 10);
-  assert.equal(count(boundary.content), 500);
+  assert.equal(count(boundary.content), 200);
   assert.equal((await request('/posts', { method: 'POST', cookie: writer, body: boundary })).status, 201);
+  const spacedBoundary = { ...boundary, content: [...boundary.content].join(' \n\t') };
+  assert.equal(count(spacedBoundary.content), 200);
+  assert.equal((await request('/posts', { method: 'POST', cookie: writer, body: spacedBoundary })).status, 201);
 });
 
 test('validated posts and comments are shared with server-controlled authorship', async () => {
@@ -211,11 +214,11 @@ test('search, category filters, and pagination return persisted stories', async 
   }
   const first = (await request('/posts', { cookie: alice })).data;
   assert.equal(first.posts.length, 9);
-  assert.equal(first.total, 14);
+  assert.equal(first.total, 15);
   assert.equal(first.pages, 2);
   const second = (await request('/posts?page=2', { cookie: alice })).data;
-  assert.equal(second.posts.length, 5);
-  assert.equal(new Set([...first.posts, ...second.posts].map((item) => item.id)).size, 14);
+  assert.equal(second.posts.length, 6);
+  assert.equal(new Set([...first.posts, ...second.posts].map((item) => item.id)).size, 15);
   const search = (await request(`/posts?q=${encodeURIComponent(post.title)}`, { cookie: alice })).data;
   assert.equal(search.total, 1);
   assert.equal(search.posts[0].id, post.id);
@@ -241,7 +244,7 @@ test('server restart preserves stories, replies, recommendations, sessions, and 
   assert.equal(detail.data.comments.filter((item) => item.parent_id).length, 2);
   assert.equal(detail.data.like_count, 1);
   assert.equal(detail.data.liked, true);
-  assert.equal((await request('/posts', { cookie: alice })).data.total, 14);
+  assert.equal((await request('/posts', { cookie: alice })).data.total, 15);
   assert.equal((await mission(bob)).data.completedMissions, 1);
 });
 

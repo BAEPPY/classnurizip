@@ -221,6 +221,10 @@ a { color: var(--green); }
 .modal-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 23px; border-bottom: 2px solid #b39a7e; font-size: 15px; font-weight: 800; background: #b9dcda; position: sticky; top: 0; z-index: 2; color: #436b61; }
 .modal-heading .icon-button { color: #667d68; background: #fff9e8; border: 1.5px solid #a5aa8c; width: 31px; height: 31px; border-radius: 4px; }
 .compose-form { padding: 25px 28px; }
+.draft-status { margin: 18px 20px 0; padding: 12px 15px; border: 1px solid #b5c8b4; border-radius: 8px; background: #eff5e9; color: #46634e; font-size: 13px; line-height: 1.65; }
+.draft-status strong, .draft-status span { display: block; }
+.draft-status span { font-size: 12px; }
+.draft-status.draft-error { background: #fff0e9; border-color: #d5a18b; color: #9a4732; }
 .author-line { display: flex; align-items: center; gap: 12px; margin-bottom: 23px; }
 .author-line strong { display: block; font-size: 14px; }
 .author-line div > span { display: block; font-size: 12px; color: #8f8069; margin-top: 3px; }
